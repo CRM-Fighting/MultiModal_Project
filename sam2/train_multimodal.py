@@ -313,7 +313,9 @@ def train_model_process(model, train_loader, val_loader, num_epochs=5, learning_
     model.load_state_dict(best_model_wts)
 
     # 保存最终模型
-    save_path = "sam2/best_msrs_model.pth"
+    os.makedirs("checkpoints", exist_ok=True)
+    save_path = os.path.join("checkpoints", "best_msrs_model.pth")
+
     torch.save(model.state_dict(), save_path)
     print(f"Model saved to {save_path}")
 
