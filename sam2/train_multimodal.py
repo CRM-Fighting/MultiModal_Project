@@ -387,7 +387,7 @@ def main():
     # D. 开始训练
     print("3. 开始训练循环...")
     # num_epochs 可以改小一点先测试，比如 2
-    history = train_model_process(model, train_loader, val_loader, num_epochs=3, learning_rate=0.0001)
+    history = train_model_process(model, train_loader, val_loader, num_epochs=50, learning_rate=0.0001)
 
     # E. 绘图
     print("4. 绘制结果...")
