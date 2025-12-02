@@ -177,13 +177,13 @@ def get_dataloaders(batch_size=2):
     # 请确保这些路径下确实有图片文件
     train_dirs = {
         'ir': r"sam2/data/MSRS/train/ir",
-        'vis': r"sam2/data/MSRS/train/vis",
+        'vi': r"sam2/data/MSRS/train/vi",
         'label': r"sam2/data/MSRS/train/Segmentation_labels"  # 假设这是Label文件夹名
     }
 
     val_dirs = {
         'ir': r"sam2/data/MSRS/test/ir",
-        'vis': r"sam2/data/MSRS/test/vis",
+        'vi': r"sam2/data/MSRS/test/vi",
         'label': r"sam2/data/MSRS/test/Segmentation_labels"
     }
 
