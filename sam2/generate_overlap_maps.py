@@ -95,10 +95,10 @@ if __name__ == "__main__":
     # --- 1. 配置路径 (请根据实际情况调整盘符或路径) ---
 
     # 输入数据集根目录
-    DATASET_ROOT = Path("F:/MultiModal_Project/sam2/data/MSRS")
+    DATASET_ROOT = Path("/home/mmsys/disk/MCL/MultiModal_Project/sam2/data/MSRS")
 
     # 输出根目录
-    OUTPUT_ROOT = Path("F:/MultiModal_Project/sam2/data/overlap_map")
+    OUTPUT_ROOT = Path("/home/mmsys/disk/MCL/MultiModal_Project/sam2/data/overlap_map")
 
     # 定义具体的输入路径
     input_paths = {
@@ -111,9 +111,9 @@ if __name__ == "__main__":
     # 定义输出路径结构
     output_paths = {
         "train_ir": OUTPUT_ROOT / "train/ir",
-        "train_vis": OUTPUT_ROOT / "train/vis",  # 注意：输出文件夹名为 vis
+        "train_vi": OUTPUT_ROOT / "train/vi",  # 注意：输出文件夹名为 vis
         "val_ir": OUTPUT_ROOT / "val/ir",
-        "val_vis": OUTPUT_ROOT / "val/vis"
+        "val_vi": OUTPUT_ROOT / "val/vi"
     }
 
     # --- 2. 初始化模型 ---
@@ -122,37 +122,34 @@ if __name__ == "__main__":
     script_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
 
     # 请确保以下相对路径指向正确，或者修改为绝对路径
-    checkpoint = script_dir / "../checkpoints/sam2.1_hiera_tiny.pt"
-    model_cfg = script_dir / "configs/sam2.1/sam2.1_hiera_t.yaml"
+    checkpoint = "../checkpoints/sam2.1_hiera_tiny.pt"
+    model_cfg = "configs/sam2.1/sam2.1_hiera_t.yaml"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"正在使用设备: {device}")
 
-    if not checkpoint.exists():
-        print(f"错误: 找不到模型权重文件: {checkpoint}")
-        print("请检查路径设置。")
-        exit()
-
-    print("正在加载 SAM2 模型...")
-    model = build_sam2(str(model_cfg), str(checkpoint), device=device)
+    try:
+        model = build_sam2(model_cfg, checkpoint, device=device)
+    except Exception as e:
+        print(f"加载 SAM2 失败，请检查路径: {e}")
     mask_generator = SAM2AutomaticMaskGenerator(model)
     print("模型加载完成。")
 
     # --- 3. 执行处理任务 ---
 
     # 任务 1: 训练集 - 红外 (所有图片)
-    process_folder(
-        input_dir=input_paths["train_ir"],
-        output_dir=output_paths["train_ir"],
-        mask_generator=mask_generator,
-        max_files=None,  # 不限制数量
-        description="Train Set - IR"
-    )
+    # process_folder(
+    #     input_dir=input_paths["train_ir"],
+    #     output_dir=output_paths["train_ir"],
+    #     mask_generator=mask_generator,
+    #     max_files=None,  # 不限制数量
+    #     description="Train Set - IR"
+    # )
 
     # 任务 2: 训练集 - 可见光 (所有图片)
     process_folder(
         input_dir=input_paths["train_vi"],
-        output_dir=output_paths["train_vis"],
+        output_dir=output_paths["train_vi"],
         mask_generator=mask_generator,
         max_files=None,  # 不限制数量
         description="Train Set - Visible"
@@ -170,7 +167,7 @@ if __name__ == "__main__":
     # 任务 4: 验证集 - 可见光 (取 MSRS test 的前 100 张)
     process_folder(
         input_dir=input_paths["test_vi"],
-        output_dir=output_paths["val_vis"],
+        output_dir=output_paths["val_vi"],
         mask_generator=mask_generator,
         max_files=100,  # 限制前 100 张
         description="Val Set - Visible"

@@ -10,7 +10,6 @@ class SimpleFusionModule(nn.Module):
         """
         super().__init__()
         # 目前是简单的相加，不需要参数，但为了以后改起来方便，预留了位置
-        # 如果你想改成卷积融合，可以在这里定义 self.conv = nn.Conv2d(...)
         self.channel_dim = channel_dim
 
     def forward(self, feat_rgb, feat_ir):

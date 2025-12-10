@@ -1,40 +1,33 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from .fusion import SimpleFusionModule
 from .segformer_head import SegFormerHead
-# 【关键修改】引入 IACR MoE
-from .iacr_moe import IACRMoEBlock
+# 引用上面的新 Block
+from .global_guided_aoe import SharedGlobalGuidedAoEBlock
 
 
-class MultiModalSegFormerIACR(nn.Module):
+class MultiModalSegFormerGlobalAoE(nn.Module):
     def __init__(self, sam_model, feature_channels, num_classes=9):
         super().__init__()
         self.sam_model = sam_model
 
-        # 冻结原有模块 (保持控制变量)
         for param in self.sam_model.parameters(): param.requires_grad = False
-
         self.fusion_layers = nn.ModuleList([SimpleFusionModule(ch) for ch in feature_channels])
         for param in self.fusion_layers.parameters(): param.requires_grad = False
-
         self.segformer_head = SegFormerHead(in_channels=feature_channels, num_classes=num_classes)
         for param in self.segformer_head.parameters(): param.requires_grad = False
 
-        # === 新增：IACR MoE 模块 ===
-        # 保持 num_experts=11, active_experts=6 以进行公平对比
-
+        # === 配置：8专家，激活3个，带共享 ===
         self.rgb_moe_layers = nn.ModuleList([
-            IACRMoEBlock(dim=ch, num_experts=11, active_experts=6)
+            SharedGlobalGuidedAoEBlock(dim=ch, num_experts=8, active_experts=3)
             for ch in feature_channels
         ])
 
         self.ir_moe_layers = nn.ModuleList([
-            IACRMoEBlock(dim=ch, num_experts=11, active_experts=6)
+            SharedGlobalGuidedAoEBlock(dim=ch, num_experts=8, active_experts=3)
             for ch in feature_channels
         ])
 
-        # 只训练 MoE
         for param in self.rgb_moe_layers.parameters(): param.requires_grad = True
         for param in self.ir_moe_layers.parameters(): param.requires_grad = True
 
@@ -57,15 +50,13 @@ class MultiModalSegFormerIACR(nn.Module):
         total_aux_loss = 0.0
 
         for i in range(4):
-            # RGB
-            out_rgb, loss_rgb = self.rgb_moe_layers[i](raw_rgb[i])
+            out_rgb, aux_r = self.rgb_moe_layers[i](raw_rgb[i])
             enhanced_rgb.append(out_rgb)
-            total_aux_loss += loss_rgb
+            total_aux_loss += aux_r
 
-            # IR
-            out_ir, loss_ir = self.ir_moe_layers[i](raw_ir[i])
+            out_ir, aux_i = self.ir_moe_layers[i](raw_ir[i])
             enhanced_ir.append(out_ir)
-            total_aux_loss += loss_ir
+            total_aux_loss += aux_i
 
         fused_features = []
         for i in range(4):
@@ -73,6 +64,6 @@ class MultiModalSegFormerIACR(nn.Module):
             fused_features.append(f)
 
         logits = self.segformer_head(fused_features)
-        logits = F.interpolate(logits, size=image_rgb.shape[2:], mode='bilinear', align_corners=False)
+        logits = torch.nn.functional.interpolate(logits, size=image_rgb.shape[2:], mode='bilinear', align_corners=False)
 
         return logits, total_aux_loss
