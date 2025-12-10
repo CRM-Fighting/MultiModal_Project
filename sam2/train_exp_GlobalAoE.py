@@ -11,23 +11,22 @@ from torch.utils.data import DataLoader, Dataset
 from PIL import Image
 from tqdm import tqdm
 import numpy as np
-# 引入混合精度
 from torch.cuda.amp import autocast, GradScaler
 
 from sam2.build_sam import build_sam2
 from sam2.modeling.multimodal_sam_global_aoe import MultiModalSegFormerGlobalAoE
 
 # ================= 实验参数 =================
-# Model: Shared Global Guided AoE (Ours)
+# Model: Global Guided AoE (No Shared Expert)
 # Experts: 8, Active: 3
 # Aux Weight: 0.5
-# LR: Backbone 1e-4, Router 1e-3 (10x)
+# LR: 1e-4 (Standard)
 # ==========================================
 
 AUX_WEIGHT = 0.5
-EXP_NAME = "Exp_GlobalAoE_Shared_Aux0.5_HighLR"  # 标记一下高学习率
+EXP_NAME = "Exp_GlobalAoE_NoShared_BaseLR"
 
-# 路径
+# 路径 (保持不变)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAM2_CONFIG = "configs/sam2.1/sam2.1_hiera_t.yaml"
 SAM2_CHECKPOINT = "../checkpoints/sam2.1_hiera_tiny.pt"
@@ -47,6 +46,8 @@ VAL_DIRS = {
 }
 
 
+# (辅助类 IOUEvaluator, SegmentationLoss, MSRSDataset, plot_training_curves 代码省略，请从之前文件复制)
+# ... 请务必补全这些辅助类 ...
 class IOUEvaluator:
     def __init__(self, num_classes):
         self.num_classes = num_classes
@@ -143,8 +144,8 @@ def train_global_aoe():
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
     os.makedirs(VIS_DIR, exist_ok=True)
 
-    print(f"=== Running Experiment: {EXP_NAME} (Ours) ===")
-    print(f"=== Config: Shared + Global Guided (Diff LR) ===")
+    print(f"=== Running Experiment: {EXP_NAME} (Pure) ===")
+    print(f"=== Config: Global Guided AoE (No Shared, No Tricks) ===")
 
     # 1. 构建
     base_sam = build_sam2(SAM2_CONFIG, SAM2_CHECKPOINT, device="cpu")
@@ -159,31 +160,14 @@ def train_global_aoe():
         model_dict.update(filtered)
         model.load_state_dict(model_dict)
         print(f"Loaded {len(filtered)} layers.")
-    else:
-        print("Warning: No baseline weights found!")
 
     model.to(device)
 
-    # 3. 统计参数 & 【关键修改】差分学习率
-    router_params = []
-    other_params = []
+    # 3. 统计参数 (普通学习率)
+    trainable = [p for p in model.parameters() if p.requires_grad]
+    print(f"Trainable Params: {sum(p.numel() for p in trainable) / 1e6:.2f} M")
 
-    for name, param in model.named_parameters():
-        if not param.requires_grad:
-            continue
-        # 识别 Router 相关的参数 (router, gate, scorer, w_down, w_up, expert_pos)
-        if "moe" in name:
-            router_params.append(param)
-        else:
-            other_params.append(param)
-
-    print(f"Router Params (High LR 1e-3): {sum(p.numel() for p in router_params) / 1e6:.2f} M")
-    print(f"Other Params (Base LR 1e-4): {sum(p.numel() for p in other_params) / 1e6:.2f} M")
-
-    optimizer = optim.AdamW([
-        {'params': other_params, 'lr': 0.0001},
-        {'params': router_params, 'lr': 0.001}  # 10倍学习率
-    ])
+    optimizer = optim.AdamW(trainable, lr=0.0001)
 
     criterion = SegmentationLoss(num_classes=9)
     evaluator = IOUEvaluator(num_classes=9)
@@ -201,7 +185,6 @@ def train_global_aoe():
         aux_meter = 0
         evaluator.reset()
 
-        # Batch=1, Accum=2 (Equivalent to Batch=2)
         train_loader = DataLoader(MSRSDataset(TRAIN_DIRS), batch_size=1, shuffle=True, num_workers=4)
         optimizer.zero_grad()
 

@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from .fusion import SimpleFusionModule
 from .segformer_head import SegFormerHead
-# 引用上面的新 Block
-from .global_guided_aoe import SharedGlobalGuidedAoEBlock
+# 引用纯净版 Block
+from .global_guided_aoe import GlobalGuidedAoEBlock
 
 
 class MultiModalSegFormerGlobalAoE(nn.Module):
@@ -17,14 +18,14 @@ class MultiModalSegFormerGlobalAoE(nn.Module):
         self.segformer_head = SegFormerHead(in_channels=feature_channels, num_classes=num_classes)
         for param in self.segformer_head.parameters(): param.requires_grad = False
 
-        # === 配置：8专家，激活3个，带共享 ===
+        # === 8专家，激活3个，无共享 ===
         self.rgb_moe_layers = nn.ModuleList([
-            SharedGlobalGuidedAoEBlock(dim=ch, num_experts=8, active_experts=3)
+            GlobalGuidedAoEBlock(dim=ch, num_experts=8, active_experts=3)
             for ch in feature_channels
         ])
 
         self.ir_moe_layers = nn.ModuleList([
-            SharedGlobalGuidedAoEBlock(dim=ch, num_experts=8, active_experts=3)
+            GlobalGuidedAoEBlock(dim=ch, num_experts=8, active_experts=3)
             for ch in feature_channels
         ])
 
